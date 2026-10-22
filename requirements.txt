@@ -1,11 +1,4 @@
-<<<<<<< HEAD
 fastapi
 uvicorn[standard]
 pytest
 httpx
-=======
-fastapi
-uvicorn[standard]
-pytest
-httpx
->>>>>>> 218b12c (Document setup and project dependencies)
