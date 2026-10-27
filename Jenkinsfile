@@ -44,6 +44,18 @@ pipeline {
                 }
             }
         }
+
+        stage('Check Deployment Tools') {
+            steps {
+                sh '''
+                    set -eu
+                    docker --version
+                    docker info
+                    kubectl config current-context
+                    kubectl get deployment finsecure-pay
+                '''
+            }
+        }
     }
 
     post {
