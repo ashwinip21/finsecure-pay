@@ -49,6 +49,7 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
                     docker --version
                     docker info
                     kubectl config current-context
