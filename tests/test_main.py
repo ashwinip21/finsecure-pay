@@ -79,3 +79,6 @@ def test_blank_transaction_id_is_rejected(valid_transaction):
     response = client.post("/validate", json=valid_transaction)
 
     assert response.status_code == 422
+
+def test_intentional_pipeline_failure():
+    assert 1 == 2
