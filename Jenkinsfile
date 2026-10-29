@@ -26,10 +26,16 @@ pipeline {
             steps {
                 sh '''
                     set -eu
-                    python3 --version
-                    python3 -m venv .venv-ci
+
+                    PYTHON_BIN=/opt/homebrew/bin/python3.12
+                    "$PYTHON_BIN" --version
+
+                    rm -rf .venv-ci
+                    "$PYTHON_BIN" -m venv .venv-ci
+
                     .venv-ci/bin/python -m pip install --upgrade pip
                     .venv-ci/bin/python -m pip install -r requirements.txt
+
                     .venv-ci/bin/python -m compileall -q app tests
                 '''
             }
@@ -44,10 +50,13 @@ pipeline {
                         --junitxml=test-results.xml
                 '''
             }
+
             post {
                 always {
-                    junit testResults: 'test-results.xml',
-                          allowEmptyResults: false
+                    junit(
+                        testResults: 'test-results.xml',
+                        allowEmptyResults: false
+                    )
                 }
             }
         }
@@ -56,7 +65,9 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+
                     .venv-ci/bin/python -m pip install pip-audit
+
                     .venv-ci/bin/python -m pip_audit \
                         -r requirements.txt
                 '''
@@ -68,13 +79,15 @@ pipeline {
                 script {
                     env.IMAGE_TAG = "build-${env.BUILD_NUMBER}"
                 }
+
                 sh '''
                     set -eu
+
                     docker build \
                         --pull \
                         -t "$IMAGE_REPO:$IMAGE_TAG" \
-                        -t "$IMAGE_REPO:latest" \
                         .
+
                     docker image inspect "$IMAGE_REPO:$IMAGE_TAG"
                 '''
             }
@@ -91,10 +104,13 @@ pipeline {
                 ]) {
                     sh '''
                         set -eu
+
                         echo "$DOCKERHUB_TOKEN" | docker login \
                             --username "$DOCKERHUB_USER" \
                             --password-stdin
+
                         docker push "$IMAGE_REPO:$IMAGE_TAG"
+
                         docker logout
                     '''
                 }
@@ -107,6 +123,7 @@ pipeline {
                     set -eu
 
                     kubectl config use-context docker-desktop
+
                     kubectl apply -f k8s/configmap.yaml
                     kubectl apply -f k8s/service.yaml
 
@@ -128,10 +145,15 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+
                     kubectl get deployment finsecure-pay \
                         -o jsonpath='{.spec.template.spec.containers[0].image}'
+
                     echo
+
                     kubectl rollout status deployment/finsecure-pay
+
+                    kubectl get pods -l app=finsecure-pay
                 '''
             }
         }
@@ -139,11 +161,13 @@ pipeline {
 
     post {
         success {
-            echo 'FinSecure Pay pipeline completed successfully.'
+            echo 'FinSecure Pay CI/CD pipeline completed successfully.'
         }
+
         failure {
             echo 'Pipeline failed. Review the failed stage. Later stages were skipped.'
         }
+
         always {
             echo 'Pipeline execution finished.'
         }
