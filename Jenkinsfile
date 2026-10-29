@@ -12,6 +12,7 @@ pipeline {
         IMAGE_REPO = 'ashwinip21/finsecure-pay'
         K8S_DEPLOYMENT = 'finsecure-pay'
         K8S_CONTAINER = 'finsecure-pay'
+        K8S_CONTEXT = 'docker-desktop'
     }
 
     stages {
@@ -26,8 +27,10 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
                     PYTHON_BIN=/opt/homebrew/bin/python3.12
+
                     "$PYTHON_BIN" --version
 
                     rm -rf .venv-ci
@@ -37,6 +40,8 @@ pipeline {
                     .venv-ci/bin/python -m pip install -r requirements.txt
 
                     .venv-ci/bin/python -m compileall -q app tests
+
+                    echo "Build completed successfully."
                 '''
             }
         }
@@ -45,6 +50,8 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
                     .venv-ci/bin/python -m pytest \
                         -v \
                         --junitxml=test-results.xml
@@ -65,11 +72,40 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
                     .venv-ci/bin/python -m pip install pip-audit
 
                     .venv-ci/bin/python -m pip_audit \
                         -r requirements.txt
+
+                    echo "Dependency security audit completed."
+                '''
+            }
+        }
+
+        stage('Check Deployment Tools') {
+            steps {
+                sh '''
+                    set -eu
+                    export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
+                    echo "Checking Docker CLI..."
+                    command -v docker
+                    docker --version
+                    docker info >/dev/null
+                    echo "Docker daemon is accessible."
+
+                    echo "Checking Kubernetes CLI..."
+                    command -v kubectl
+                    kubectl version --client
+
+                    kubectl config get-contexts
+                    kubectl config use-context "$K8S_CONTEXT"
+                    kubectl get nodes
+
+                    kubectl get deployment "$K8S_DEPLOYMENT"
+                    echo "Deployment tools are accessible."
                 '''
             }
         }
@@ -82,6 +118,9 @@ pipeline {
 
                 sh '''
                     set -eu
+                    export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
+                    echo "Building image: $IMAGE_REPO:$IMAGE_TAG"
 
                     docker build \
                         --pull \
@@ -89,6 +128,8 @@ pipeline {
                         .
 
                     docker image inspect "$IMAGE_REPO:$IMAGE_TAG"
+
+                    echo "Container image built successfully."
                 '''
             }
         }
@@ -104,6 +145,7 @@ pipeline {
                 ]) {
                     sh '''
                         set -eu
+                        export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
                         echo "$DOCKERHUB_TOKEN" | docker login \
                             --username "$DOCKERHUB_USER" \
@@ -112,6 +154,8 @@ pipeline {
                         docker push "$IMAGE_REPO:$IMAGE_TAG"
 
                         docker logout
+
+                        echo "Image pushed successfully."
                     '''
                 }
             }
@@ -121,8 +165,9 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
-                    kubectl config use-context docker-desktop
+                    kubectl config use-context "$K8S_CONTEXT"
 
                     kubectl apply -f k8s/configmap.yaml
                     kubectl apply -f k8s/service.yaml
@@ -137,6 +182,9 @@ pipeline {
 
                     kubectl get deployment "$K8S_DEPLOYMENT"
                     kubectl get pods -l app=finsecure-pay
+                    kubectl get service finsecure-pay-service
+
+                    echo "Kubernetes deployment completed."
                 '''
             }
         }
@@ -145,15 +193,23 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
-                    kubectl get deployment finsecure-pay \
+                    kubectl config use-context "$K8S_CONTEXT"
+
+                    echo "Deployed image:"
+                    kubectl get deployment "$K8S_DEPLOYMENT" \
                         -o jsonpath='{.spec.template.spec.containers[0].image}'
-
                     echo
 
-                    kubectl rollout status deployment/finsecure-pay
+                    kubectl rollout status \
+                        deployment/"$K8S_DEPLOYMENT" \
+                        --timeout=180s
 
+                    kubectl get deployment "$K8S_DEPLOYMENT"
                     kubectl get pods -l app=finsecure-pay
+
+                    echo "Deployment verification completed."
                 '''
             }
         }
@@ -165,7 +221,7 @@ pipeline {
         }
 
         failure {
-            echo 'Pipeline failed. Review the failed stage. Later stages were skipped.'
+            echo 'Pipeline failed. Review the failed stage. Later stages should be skipped.'
         }
 
         always {
