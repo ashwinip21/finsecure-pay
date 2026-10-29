@@ -148,17 +148,30 @@ pipeline {
                     export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
                     IMAGE="$IMAGE_REPO:$IMAGE_TAG"
+                    mkdir -p security-reports
+
                     REPORT="security-reports/trivy-image-report.txt"
                     JSON_REPORT="security-reports/trivy-image-report.json"
 
-                    # Always create a full vulnerability report first.
+                    echo "=================================================="
+                    echo "CONTAINER IMAGE SECURITY SCAN - TRIVY"
+                    echo "Image being scanned: $IMAGE"
+                    echo "Scanner: Trivy"
+                    echo "Severity filter: HIGH,CRITICAL"
+                    echo "Ignore unfixed vulnerabilities: enabled"
+                    echo "Security gate: fail on HIGH/CRITICAL findings"
+                    echo "=================================================="
+
+                    echo "Generating full JSON vulnerability report..."
+
                     trivy image \
                         --scanners vuln \
                         --format json \
                         --output "$JSON_REPORT" \
                         "$IMAGE"
 
-                    # Enforce the HIGH/CRITICAL security gate.
+                    echo "Running HIGH/CRITICAL security gate..."
+
                     set +e
                     trivy image \
                         --scanners vuln \
@@ -171,19 +184,23 @@ pipeline {
                     SCAN_STATUS=$?
                     set -e
 
+                    echo "========== TRIVY SCAN RESULTS =========="
                     if [ -f "$REPORT" ]; then
                         cat "$REPORT"
                     fi
 
                     if [ "$SCAN_STATUS" -ne 0 ]; then
-                        echo "Security gate failed or scan could not complete."
+                        echo "SECURITY GATE FAILED."
+                        echo "Review security-reports/trivy-image-report.txt"
                         exit "$SCAN_STATUS"
                     fi
 
                     echo "Security gate passed."
+                    echo "No unfixed HIGH/CRITICAL findings were reported."
                 '''
             }
         }
+
 
         stage('Push Image') {
             steps {
