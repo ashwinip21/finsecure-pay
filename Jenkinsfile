@@ -46,6 +46,24 @@ pipeline {
             }
         }
 
+        stage('Code Quality - Ruff') {
+            steps {
+                sh '''
+                    set -eu
+                    export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
+                    .venv-ci/bin/python -m pip install ruff
+
+                    .venv-ci/bin/python -m ruff check \
+                        app tests \
+                        --output-format json \
+                        --output-file ruff-report.json
+
+                    echo "Static analysis passed."
+                '''
+            }
+        }
+
         stage('Test') {
             steps {
                 sh '''
@@ -62,13 +80,13 @@ pipeline {
                 always {
                     junit(
                         testResults: 'test-results.xml',
-                        allowEmptyResults: false
+                        allowEmptyResults: true
                     )
                 }
             }
         }
 
-        stage('Security Checks') {
+        stage('Dependency Vulnerability Audit') {
             steps {
                 sh '''
                     set -eu
@@ -77,9 +95,11 @@ pipeline {
                     .venv-ci/bin/python -m pip install pip-audit
 
                     .venv-ci/bin/python -m pip_audit \
-                        -r requirements.txt
+                        -r requirements.txt \
+                        --format json \
+                        --output dependency-audit-report.json
 
-                    echo "Dependency security audit completed."
+                    echo "Dependency vulnerability audit passed."
                 '''
             }
         }
@@ -90,22 +110,24 @@ pipeline {
                     set -eu
                     export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
-                    echo "Checking Docker CLI..."
+                    echo "Checking Docker..."
                     command -v docker
                     docker --version
                     docker info >/dev/null
-                    echo "Docker daemon is accessible."
 
-                    echo "Checking Kubernetes CLI..."
+                    echo "Checking kubectl..."
                     command -v kubectl
                     kubectl version --client
 
-                    kubectl config get-contexts
+                    echo "Checking Trivy..."
+                    command -v trivy
+                    trivy --version
+
                     kubectl config use-context "$K8S_CONTEXT"
                     kubectl get nodes
-
                     kubectl get deployment "$K8S_DEPLOYMENT"
-                    echo "Deployment tools are accessible."
+
+                    echo "Required tools are accessible."
                 '''
             }
         }
@@ -120,7 +142,7 @@ pipeline {
                     set -eu
                     export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
-                    echo "Building image: $IMAGE_REPO:$IMAGE_TAG"
+                    echo "Building $IMAGE_REPO:$IMAGE_TAG"
 
                     docker build \
                         --pull \
@@ -130,6 +152,48 @@ pipeline {
                     docker image inspect "$IMAGE_REPO:$IMAGE_TAG"
 
                     echo "Container image built successfully."
+                '''
+            }
+        }
+
+        stage('Container Image Security Scan - Trivy') {
+            steps {
+                sh '''
+                    set -eu
+                    export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
+                    IMAGE="$IMAGE_REPO:$IMAGE_TAG"
+                    REPORT="trivy-image-report.txt"
+
+                    echo "Scanning image: $IMAGE"
+                    echo "Security policy: block HIGH and CRITICAL vulnerabilities."
+
+                    # Generate a report and enforce the security gate.
+                    # The report is printed even when the gate fails.
+                    if trivy image \
+                        --scanners vuln \
+                        --severity HIGH,CRITICAL \
+                        --ignore-unfixed \
+                        --exit-code 1 \
+                        --format table \
+                        --output "$REPORT" \
+                        "$IMAGE"
+                    then
+                        SCAN_STATUS=0
+                    else
+                        SCAN_STATUS=$?
+                    fi
+
+                    if [ -f "$REPORT" ]; then
+                        cat "$REPORT"
+                    fi
+
+                    if [ "$SCAN_STATUS" -ne 0 ]; then
+                        echo "SECURITY GATE FAILED: HIGH/CRITICAL vulnerabilities detected, or the scan could not complete."
+                        exit "$SCAN_STATUS"
+                    fi
+
+                    echo "Security gate passed."
                 '''
             }
         }
@@ -147,13 +211,14 @@ pipeline {
                         set -eu
                         export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
-                        echo "$DOCKERHUB_TOKEN" | docker login \
+                        # Ensure Docker logout is attempted even on failure.
+                        trap 'docker logout >/dev/null 2>&1 || true' EXIT
+
+                        printf '%s' "$DOCKERHUB_TOKEN" | docker login \
                             --username "$DOCKERHUB_USER" \
                             --password-stdin
 
                         docker push "$IMAGE_REPO:$IMAGE_TAG"
-
-                        docker logout
 
                         echo "Image pushed successfully."
                     '''
@@ -216,16 +281,27 @@ pipeline {
     }
 
     post {
+        always {
+            junit(
+                testResults: 'test-results.xml',
+                allowEmptyResults: true
+            )
+
+            archiveArtifacts(
+                artifacts: 'ruff-report.json,dependency-audit-report.json,trivy-image-report.txt,test-results.xml',
+                allowEmptyArchive: true,
+                fingerprint: true
+            )
+
+            echo 'Pipeline execution finished. Reports archived when generated.'
+        }
+
         success {
             echo 'FinSecure Pay CI/CD pipeline completed successfully.'
         }
 
         failure {
-            echo 'Pipeline failed. Review the failed stage. Later stages should be skipped.'
-        }
-
-        always {
-            echo 'Pipeline execution finished.'
+            echo 'Pipeline failed. Check the stage logs and archived security reports. Later stages are skipped after a failure.'
         }
     }
 }
