@@ -319,7 +319,6 @@ pipeline {
                     trivy image \
                         --scanners vuln \
                         --severity HIGH,CRITICAL \
-                        --ignore-unfixed \
                         --exit-code 1 \
                         --format table \
                         --output "$REPORT" \
