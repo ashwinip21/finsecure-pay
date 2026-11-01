@@ -199,3 +199,5 @@ git push origin main
 
 Review .gitignore before staging files to ensure that virtual environments, caches, coverage reports, and secrets are excluded.
 
+
+CI/CD pipeline trigger demonstration.
