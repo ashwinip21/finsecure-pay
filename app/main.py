@@ -1,7 +1,7 @@
 
 from fastapi import FastAPI
-from pydantic import BaseModel, Field, field_validator, model_validator
 from prometheus_fastapi_instrumentator import Instrumentator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 app = FastAPI(
     title="FinSecure Pay Transaction Validation API",
