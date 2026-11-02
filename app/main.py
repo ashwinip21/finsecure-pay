@@ -1,6 +1,7 @@
 
 from fastapi import FastAPI
 from pydantic import BaseModel, Field, field_validator, model_validator
+from prometheus_fastapi_instrumentator import Instrumentator
 
 app = FastAPI(
     title="FinSecure Pay Transaction Validation API",
@@ -8,6 +9,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
+Instrumentator().instrument(app).expose(app)
 
 class Transaction(BaseModel):
     transaction_id: str = Field(min_length=1, max_length=100)
