@@ -488,11 +488,12 @@ pipeline {
     // POST BUILD ACTIONS
     // ==========================================
 
+
     post {
 
         always {
             junit testResults: 'test-results.xml',
-                  allowEmptyResults: true
+                allowEmptyResults: true
 
             archiveArtifacts(
                 artifacts: 'security-reports/**,test-results.xml',
@@ -505,10 +506,41 @@ pipeline {
 
         success {
             echo 'FinSecure Pay AWS EKS CI/CD pipeline completed successfully.'
+
+            emailext(
+                to: 'ashwini.p21@gmail.com',
+                subject: "FinSecure Pay - Build SUCCESS - #${BUILD_NUMBER}",
+                mimeType: 'text/html',
+                body: """
+                    <h2>FinSecure Pay CI/CD Pipeline</h2>
+                    <p><b>Project:</b> finsecure-pay-pipeline</p>
+                    <p><b>Build Number:</b> ${BUILD_NUMBER}</p>
+                    <p><b>Build Status:</b> SUCCESS</p>
+                    <p><b>Repository:</b> ashwinip21/finsecure-pay</p>
+                    <p><b>Build URL:</b>
+                    <a href="${BUILD_URL}">${BUILD_URL}</a></p>
+                    <p>The FinSecure Pay pipeline completed successfully.</p>
+                """
+            )
         }
 
         failure {
             echo 'Pipeline failed. Review the failed stage and archived reports.'
+
+            emailext(
+                to: 'ashwini.p21@gmail.com',
+                subject: "FinSecure Pay - Build FAILURE - #${BUILD_NUMBER}",
+                mimeType: 'text/html',
+                body: """
+                    <h2>FinSecure Pay CI/CD Pipeline</h2>
+                    <p><b>Project:</b> finsecure-pay-pipeline</p>
+                    <p><b>Build Number:</b> ${BUILD_NUMBER}</p>
+                    <p><b>Build Status:</b> FAILURE</p>
+                    <p><b>Build URL:</b>
+                    <a href="${BUILD_URL}">${BUILD_URL}</a></p>
+                    <p>Please review the failed pipeline stage.</p>
+                """
+            )
         }
     }
-}
+
