@@ -41,7 +41,7 @@ Python 3.10 or a compatible newer version
 Git
 Visual Studio Code (recommended)
 
-The project was developed and tested on macOS using Python 3.14.
+The project was developed and tested on macOS using Python 3.12.
 
 6. Setup and Installation
 Step 1: Clone the repository

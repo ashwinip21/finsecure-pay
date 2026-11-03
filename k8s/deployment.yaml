@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: finsecure-pay
-          image: ashwinip21/finsecure-pay:1.0.0
+          image: ashwinip21/finsecure-pay:build-31
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
