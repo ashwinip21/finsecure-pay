@@ -4,7 +4,7 @@ kind: Service
 metadata:
   name: finsecure-pay-service
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: finsecure-pay
   ports:
