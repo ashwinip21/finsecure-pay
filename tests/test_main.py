@@ -82,4 +82,4 @@ def test_blank_transaction_id_is_rejected(valid_transaction):
 
 
 def test_demo_failure():
-    assert 1 == 2
+    assert 1 == 2  # noqa: PLR0133
